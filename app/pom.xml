@@ -16,6 +16,7 @@
 	<packaging>jar</packaging>
 	<properties>
 		<java.version>11</java.version>
+		<lombok.version>1.18.32</lombok.version>
 		<jacoco.version>0.8.7</jacoco.version>
    		<sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
     		<sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
