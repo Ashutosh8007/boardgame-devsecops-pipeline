@@ -26,4 +26,18 @@ Real issues encountered during this project, and how they were diagnosed and res
 2. If still stuck, check for an orphaned process with `ps aux`, then `sudo systemctl restart docker`
 3. If still stuck, `wsl --shutdown` as a last resort
 
+## Lombok Compiler-Internals Crash on JDK 21
+
+**Symptom:** Jenkins pipeline fails during `mvn clean compile` with:
+`java.lang.NoSuchFieldError: Class com.sun.tools.javac.tree.JCTree$JCImport does not have member field 'com.sun.tools.javac.tree.JCTree qualid'`
+
+**Root cause:** Lombok hooks directly into javac's internal (non-public) AST classes to generate boilerplate code at compile time. The project's inherited Lombok version (1.18.22, via the Spring Boot 2.5.6 parent POM's dependency management) predates JDK 21 and is incompatible with its internal compiler structure. This also explained why local Docker builds (using JDK 17 in the Dockerfile) succeeded while Jenkins (configured with JDK 21) failed — an environment/JDK version mismatch across the toolchain.
+
+**Diagnosis approach:**
+1. Read the actual stack trace rather than assuming a generic "build broke" — identified the error was in JVM-internal compiler classes, not application code
+2. Recognized Lombok as the likely cause since it's the only dependency that manipulates javac internals
+3. Confirmed the fix locally (`mvn clean compile`) before re-testing in Jenkins CI
+
+**Fix:** Added an explicit `<lombok.version>1.18.32</lombok.version>` property in `pom.xml` to override the outdated version inherited from the Spring Boot parent POM.
+
 ## (More entries added as encountered)
