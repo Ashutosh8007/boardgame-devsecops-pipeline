@@ -1,0 +1,52 @@
+# ==============================
+# Java / Maven
+# ==============================
+app/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# ==============================
+# IDE
+# ==============================
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# ==============================
+# OS
+# ==============================
+.DS_Store
+Thumbs.db
+
+# ==============================
+# Logs
+# ==============================
+*.log
+logs/
+
+# ==============================
+# Helm
+# ==============================
+helm/boardgame/charts/
+*.tgz
+
+# ==============================
+# Secrets — never commit real credentials
+# ==============================
+*.env
+secrets.yaml
+**/secret-*.yaml
+kubeconfig
+*.pem
+*.key
+
+# ==============================
+# Trivy / Scan Reports (generated artifacts, not source)
+# ==============================
+trivy-report*.html
+trivy-report*.json
