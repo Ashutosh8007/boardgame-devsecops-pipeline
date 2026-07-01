@@ -2,7 +2,7 @@
 
 A production-style CI/CD pipeline that builds, tests, scans, and deploys a Java Spring Boot application to a self-managed Kubernetes (K3s) cluster — engineered to run within real hardware constraints (1 vCPU / 1GB RAM on AWS EC2 t2.micro).
 
-> **Status:** 🚧 In progress — built incrementally, phase by phase. See [docs/](./docs) for detailed architecture and progress notes.
+> **Status:** 🚧 In progress — Docker & Dockerfile hardening complete, CI/CD pipeline in progress.
 
 ## What This Project Demonstrates
 
