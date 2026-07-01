@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'JDK21'
+        maven 'Maven3'
+    }
+
+    environment {
+        APP_DIR = 'app'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Checked out branch: ${env.GIT_BRANCH ?: 'unknown'}"
+                sh 'git log -1 --oneline'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh 'mvn clean compile'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit "${APP_DIR}/target/surefire-reports/*.xml"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build and tests passed.'
+        }
+        failure {
+            echo 'Build or tests failed - check the stage logs above.'
+        }
+    }
+}
