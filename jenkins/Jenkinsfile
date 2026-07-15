@@ -30,12 +30,40 @@ pipeline {
         stage('Test') {
             steps {
                 dir("${APP_DIR}") {
-                    sh 'mvn test'
+                    // 'package' runs the full lifecycle through compile -> test -> package,
+                    // which also triggers the jacoco-maven-plugin's 'report' goal (bound to
+                    // the package phase) to generate the XML coverage report SonarQube needs.
+                    // Running only 'mvn test' would skip that goal and silently produce a
+                    // SonarQube scan with no coverage data.
+                    sh 'mvn package'
                 }
             }
             post {
                 always {
                     junit "${APP_DIR}/target/surefire-reports/*.xml"
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                dir("${APP_DIR}") {
+                    withSonarQubeEnv('SonarQube') {
+                        sh "${tool 'SonarScanner'}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                // Waits for SonarQube's background analysis to finish and checks the
+                // configured Quality Gate result. abortPipeline: false means a failed
+                // gate is reported but doesn't hard-fail the build yet - starting in
+                // observe mode so the first few real scans don't unexpectedly block
+                // the pipeline while we're still tuning what "acceptable" looks like.
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
