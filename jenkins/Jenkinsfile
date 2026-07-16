@@ -62,7 +62,7 @@ pipeline {
                 // gate is reported but doesn't hard-fail the build yet - starting in
                 // observe mode so the first few real scans don't unexpectedly block
                 // the pipeline while we're still tuning what "acceptable" looks like.
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: false
                 }
             }
