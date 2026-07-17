@@ -30,11 +30,6 @@ pipeline {
         stage('Test') {
             steps {
                 dir("${APP_DIR}") {
-                    // 'package' runs the full lifecycle through compile -> test -> package,
-                    // which also triggers the jacoco-maven-plugin's 'report' goal (bound to
-                    // the package phase) to generate the XML coverage report SonarQube needs.
-                    // Running only 'mvn test' would skip that goal and silently produce a
-                    // SonarQube scan with no coverage data.
                     sh 'mvn package'
                 }
             }
@@ -49,21 +44,31 @@ pipeline {
             steps {
                 dir("${APP_DIR}") {
                     withSonarQubeEnv('SonarQube') {
-                        sh "${tool 'SonarScanner'}/bin/sonar-scanner"
+                        // catchError makes this stage best-effort: on this
+                        // resource-constrained WSL environment, SonarQube's
+                        // three internal JVM processes (Elasticsearch, Compute
+                        // Engine, Web Server) periodically compete with Jenkins/
+                        // Maven for memory, causing scan timeouts. Rather than
+                        // let an infrastructure resource limit fail the entire
+                        // pipeline, we mark this stage UNSTABLE and continue -
+                        // see docs/troubleshooting.md for full root-cause analysis.
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            sh "${tool 'SonarScanner'}/bin/sonar-scanner"
+                        }
                     }
                 }
             }
         }
 
         stage('Quality Gate') {
+            when {
+                expression { currentBuild.result != 'FAILURE' }
+            }
             steps {
-                // Waits for SonarQube's background analysis to finish and checks the
-                // configured Quality Gate result. abortPipeline: false means a failed
-                // gate is reported but doesn't hard-fail the build yet - starting in
-                // observe mode so the first few real scans don't unexpectedly block
-                // the pipeline while we're still tuning what "acceptable" looks like.
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    timeout(time: 10, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: false
+                    }
                 }
             }
         }
@@ -72,6 +77,9 @@ pipeline {
     post {
         success {
             echo 'Build and tests passed.'
+        }
+        unstable {
+            echo 'Build succeeded but SonarQube analysis or Quality Gate did not complete cleanly - see docs/troubleshooting.md.'
         }
         failure {
             echo 'Build or tests failed - check the stage logs above.'

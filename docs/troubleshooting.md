@@ -40,4 +40,48 @@ Real issues encountered during this project, and how they were diagnosed and res
 
 **Fix:** Added an explicit `<lombok.version>1.18.32</lombok.version>` property in `pom.xml` to override the outdated version inherited from the Spring Boot parent POM.
 
+## SonarQube Resource Contention on Constrained WSL Environment
+
+**Symptom:** SonarQube scans intermittently fail with `SocketTimeoutException`
+or connection resets during analysis (loading quality profiles, active rules,
+or report upload), despite SonarQube itself being confirmed healthy
+(`curl` returns 200, logs show "SonarQube is operational").
+
+**Root cause:** SonarQube Community Edition runs three separate internal JVM
+processes (Elasticsearch, Compute Engine, Web Server), together consuming
+~1.5GB RAM and spiking to 200%+ CPU during analysis. On this project's WSL
+environment (3.7GB total, shared with Jenkins and Maven builds), this leaves
+insufficient headroom for SonarQube to respond to scanner requests within
+default timeouts.
+
+**Diagnosis approach (ruled out several causes before confirming root cause):**
+1. Initially suspected a JDK/JaCoCo version incompatibility - confirmed and
+   fixed separately (JaCoCo 0.8.7 -> 0.8.11 for JDK 21 bytecode support)
+2. Suspected unused bundled language analyzers (Go, Python, PHP, etc.) added
+   overhead - investigated via `docker exec sonarqube ls
+   /opt/sonarqube/extensions/plugins/`, found these are bundled into
+   SonarQube Community Edition's core distribution, not separately removable
+3. Confirmed actual resource pressure directly: `docker stats --no-stream
+   sonarqube` showed 270% CPU / 1.5GB RAM during a scan, with system-wide
+   `free -h` showing under 100MB available
+4. Increased `sonar.ws.timeout` to 300s as a partial mitigation - reduced
+   but did not eliminate failures under peak load
+
+**Resolution:** Rather than let this known infrastructure constraint fail
+the entire pipeline, the Jenkinsfile wraps the SonarQube Analysis and
+Quality Gate stages in `catchError(buildResult: 'UNSTABLE')`. A resource
+timeout marks the build UNSTABLE (visible, honest signal) rather than
+FAILURE, allowing the pipeline to still complete Build/Test/deploy stages.
+
+**Real fix (not applied, by choice):** Increasing WSL's memory allocation
+via `.wslconfig` (e.g. from 3.7GB to 6GB) would very likely resolve this
+completely, since SonarQube has been confirmed to complete full scans
+successfully when resource contention is lower. This wasn't applied because
+this project's constraint is deliberately fixed at what's realistically
+available on the target hardware profile, matching the AWS EC2 t2.micro
+constraint the whole project is designed around. In a real production setup,
+SonarQube would run on dedicated infrastructure, not share a workstation
+with CI tooling - this limitation is specific to the resource-constrained
+learning environment, not the tool or the pipeline design.
+
 ## (More entries added as encountered)
