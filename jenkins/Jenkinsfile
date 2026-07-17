@@ -39,6 +39,30 @@ pipeline {
                 }
             }
         }
+	
+	stage('Trivy Filesystem Scan') {
+            steps {
+                dir("${APP_DIR}") {
+                    // Informational, not blocking: this app's dependency tree
+                    // (Spring Boot 2.5.6, from 2021) has known, real CVEs that
+                    // would require a significant framework upgrade to fully
+                    // resolve - out of scope for this pipeline phase. Findings
+                    // are captured and archived so they're visible and tracked,
+                    // not silently ignored. See docs/future-improvements.md.
+                    sh '''
+                        trivy fs --scanners vuln --severity HIGH,CRITICAL \
+                          --exit-code 0 --format json -o trivy-fs-report.json .
+                        trivy fs --scanners vuln --severity HIGH,CRITICAL \
+                          --exit-code 0 .
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: "${APP_DIR}/trivy-fs-report.json", allowEmptyArchive: true
+                }
+            }
+        }	
 
         stage('SonarQube Analysis') {
             steps {
