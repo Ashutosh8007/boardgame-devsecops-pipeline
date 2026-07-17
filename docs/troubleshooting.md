@@ -84,4 +84,20 @@ SonarQube would run on dedicated infrastructure, not share a workstation
 with CI tooling - this limitation is specific to the resource-constrained
 learning environment, not the tool or the pipeline design.
 
+## Jenkins timeout Step Bypasses catchError, Forces Build ABORTED
+
+**Symptom:** Even with SonarQube Analysis wrapped in `catchError` to prevent
+hard failures, a separate `waitForQualityGate` step inside a `timeout` block
+still resulted in `Finished: ABORTED` instead of the intended `UNSTABLE`.
+
+**Root cause:** Jenkins' `timeout` step, when it expires, sets the overall
+build result to ABORTED directly as part of its interrupt signal - this
+happens before `catchError` can intercept and downgrade it. `catchError` is
+designed for regular step failures/exceptions, not `timeout`-driven aborts.
+
+**Fix:** Removed the blocking `waitForQualityGate` step entirely. The
+SonarQube Analysis stage (still wrapped in `catchError`) reliably completes
+and uploads the scan report; Quality Gate results are viewable directly on
+the SonarQube dashboard without Jenkins needing to poll and block on them.
+
 ## (More entries added as encountered)
