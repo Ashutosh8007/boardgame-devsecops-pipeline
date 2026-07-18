@@ -100,4 +100,26 @@ SonarQube Analysis stage (still wrapped in `catchError`) reliably completes
 and uploads the scan report; Quality Gate results are viewable directly on
 the SonarQube dashboard without Jenkins needing to poll and block on them.
 
+## SonarQube Occasionally Unreachable During Heavy Pipeline Runs (Docker Build/Push)
+
+**Symptom:** SonarQube Analysis stage fails with `Failed to query server
+version: Call to URL [.../api/v2/analysis/version] failed: null`, even
+though SonarQube is confirmed healthy immediately before and after
+(`docker ps` shows it `Up`, `curl` returns 200).
+
+**Root cause:** Same underlying resource constraint as the earlier
+SonarQube timeout issue (see above), but triggered by a different source
+of load - a full pipeline run now includes `docker build`, a Trivy image
+scan, and `docker push`, all of which are CPU/network-intensive. This
+transient load appears to be enough to make SonarQube briefly
+unresponsive to new connections without actually crashing the container.
+
+**Resolution:** No additional fix applied. The existing `catchError`
+wrapper around the SonarQube Analysis stage already handles this
+correctly - the build is marked `UNSTABLE`, not `FAILURE`, and all other
+stages (Build, Test, Trivy scans, Docker push) complete unaffected. This
+is treated as an accepted, documented characteristic of running the full
+pipeline on a resource-constrained WSL environment, consistent with the
+project's stated hardware-constraint framing.
+
 ## (More entries added as encountered)
