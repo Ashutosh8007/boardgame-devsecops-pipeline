@@ -50,3 +50,11 @@ kubeconfig
 # ==============================
 trivy-report*.html
 trivy-report*.json
+
+# ==============================
+# Terraform
+# ==============================
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfvars
