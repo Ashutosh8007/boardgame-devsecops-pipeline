@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardgame-deployment
+  labels:
+    app: boardgame
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boardgame
+  template:
+    metadata:
+      labels:
+        app: boardgame
+    spec:
+      containers:
+        - name: boardgame
+          image: ashutosh8007/boardgame:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            # Explicit resource requests/limits matter a lot here - on a
+            # 913Mi node already running K3s's own ~500Mi control plane,
+            # an unbounded pod could starve the node or get OOM-killed
+            # unpredictably. These numbers match the JVM heap tuning we
+            # set in the Dockerfile back in Phase 4 (-Xmx256m -Xms128m).
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "350Mi"
+              cpu: "500m"
