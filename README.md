@@ -1,8 +1,8 @@
 # Boardgame DevSecOps Pipeline
 
-A production-style CI/CD pipeline that builds, tests, scans, and deploys a Java Spring Boot application to a self-managed Kubernetes (K3s) cluster — engineered to run within real hardware constraints (1 vCPU / 1GB RAM on AWS EC2 t2.micro).
+A production-style CI/CD pipeline that builds, tests, scans, and deploys a Java Spring Boot application to a self-managed Kubernetes (K3s) cluster — engineered to run within real hardware constraints (1 vCPU / 1GB RAM on AWS EC2 t3.micro).
 
-> **Status:** 🚧 In progress — Jenkins CI/CD pipeline operational (build, test, SonarQube integration). SonarQube analysis runs best-effort due to a documented resource constraint (see docs/troubleshooting.md). Building out Phases 7-15.
+> **Status:** ✅ Live — full pipeline operational (Jenkins build/test, SonarQube, Trivy, Docker Hub) and deployed to a self-managed K3s cluster on AWS EC2, reachable at a public IP. SonarQube analysis runs best-effort due to a documented resource constraint (see docs/troubleshooting.md). Building out Phases 10-15 (Helm, CI/CD deploy automation, security hardening, monitoring).
 
 ## What This Project Demonstrates
 

@@ -35,3 +35,21 @@ even though the pipeline doesn't currently gate on them.
 Trivy stage to `--exit-code 1` on CRITICAL findings once the dependency tree
 is genuinely current, making the scan an enforced quality gate rather than
 a report-only stage.
+
+## HTTPS and Domain Name for the Application
+
+The app is currently reachable over plain HTTP at a static public IP
+(`http://<elastic-ip>:30080`), stable across EC2 stop/start cycles thanks
+to an Elastic IP (see docs/troubleshooting.md). Two natural next steps,
+not yet implemented:
+
+- **A real domain name** pointed at the Elastic IP, rather than a raw
+  IP:port URL - makes the deployment presentable and is a prerequisite
+  for TLS via Let's Encrypt (which requires a domain, not just an IP)
+- **HTTPS for the application itself** - distinct from the TLS already
+  in place for the Kubernetes API server (`tls-san`); the app's own
+  traffic (browser to NodePort) is currently unencrypted
+
+Both are natural fits for Phase 13 (Security) or as a post-Phase-15
+enhancement, once Ingress is reconsidered (see the Traefik removal entry
+in docs/troubleshooting.md for why it isn't in place yet).

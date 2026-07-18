@@ -122,4 +122,127 @@ is treated as an accepted, documented characteristic of running the full
 pipeline on a resource-constrained WSL environment, consistent with the
 project's stated hardware-constraint framing.
 
+## Free-Tier Instance Type Mismatch (t2.micro Rejected by AWS)
+
+**Symptom:** `terraform apply` failed creating the EC2 instance with
+`InvalidParameterCombination: The specified instance type is not eligible
+for Free Tier`, despite `t2.micro` being the historically standard
+free-tier instance type.
+
+**Root cause:** AWS free-tier eligible instance types vary by account
+and region and have shifted over time; this account's free tier in
+`ap-south-1` no longer includes `t2.micro`.
+
+**Diagnosis approach:** Queried AWS directly rather than guessing at a
+replacement: `aws ec2 describe-instance-types --filters
+Name=free-tier-eligible,Values=true --region ap-south-1`, which returned
+`t3.micro`, `t4g.micro`, `t3.small`, `t4g.small` as actually eligible.
+
+**Fix:** Changed `instance_type` in `main.tf` from `t2.micro` to
+`t3.micro` - same 1 vCPU/1GB RAM specification as originally planned in
+Phase 1, so the project's resource-constraint framing remains accurate;
+only the exact instance family name changed.
+
+## K3s Severe Memory/I/O Contention on First Boot (t3.micro, 913Mi RAM)
+
+**Symptom:** Shortly after installing K3s, `kubectl` commands (even run
+locally on the instance via `sudo k3s kubectl`) failed with `Unable to
+connect to the server: net/http: TLS handshake timeout`. System pods
+(coredns, metrics-server, local-path-provisioner) were stuck in
+`ContainerCreating` far longer than expected.
+
+**Root cause:** K3s's control plane (API server, controller-manager,
+scheduler, containerd) alone consumed ~500-550Mi of the instance's
+913Mi total RAM, leaving under 30Mi available. `top` showed 80%+ CPU
+time in I/O wait and a load average above the instance's 2 vCPUs,
+indicating the system was thrashing rather than just slow.
+
+**Diagnosis approach:**
+1. Ruled out a hard OOM kill first: `sudo dmesg | grep -i "killed
+   process\|out of memory"` returned empty - the process was straining,
+   not crashed
+2. Confirmed real resource pressure directly with `free -h` and `top -b
+   -n 1`, rather than assuming from symptoms alone
+3. Checked `systemctl status k3s` to confirm the service itself was
+   still `active (running)` despite the connectivity failures
+
+**Fix:** Added a 1GB swap file (`fallocate` + `mkswap` + `swapon`,
+persisted via `/etc/fstab`) to give the kernel breathing room to page
+out infrequently-used memory instead of the system grinding to a halt
+under zero-swap pressure. This is standard, accepted practice for
+memory-constrained Kubernetes nodes, not a workaround.
+
+## Traefik (K3s's Bundled Ingress Controller) Failed to Install Under Resource Pressure
+
+**Symptom:** The `helm-install-traefik` Job pod repeatedly failed
+(`Error`, then `CrashLoopBackOff`) during initial K3s startup. Its logs
+showed the `helm install` command starting but never completing or
+producing an error - consistent with the process being killed or
+timing out mid-execution rather than failing on a configuration issue.
+
+**Root cause:** Same resource starvation as above - Traefik's Helm
+install job competed for the same critically limited memory/CPU during
+the exact window K3s's own control plane was already straining to
+start.
+
+**Decision:** Rather than fight to keep Traefik stable on a 913Mi node,
+disabled it entirely via K3s's own config (`disable: traefik` in
+`/etc/rancher/k3s/config.yaml`) and used a plain Kubernetes `Service`
+of type `NodePort` to expose the app instead. This is a deliberate
+architectural tradeoff, not a limitation being hidden: NodePort has a
+smaller memory footprint and is a better fit for this project's stated
+hardware constraints than limping an Ingress controller along on
+insufficient resources. Ingress can be revisited later if the resource
+picture changes (see docs/future-improvements.md).
+
+## kubectl Remote Access: Kubeconfig Paste Corruption and TLS SAN Mismatch
+
+**Symptom (1):** After manually copying K3s's kubeconfig into
+`~/.kube/config` on the WSL machine, `kubectl` failed with `yaml: line
+20: could not find expected ':'`.
+
+**Root cause (1):** A manual copy/paste into `nano` picked up a stray
+shell prompt line (`ubuntu@ip-...:~$`) from the terminal output,
+landing in the middle of the YAML file and breaking its structure.
+
+**Fix (1):** Abandoned manual paste entirely. Pulled the file
+programmatically instead: `ssh -i ~/.ssh/boardgame-ec2 ubuntu@<ip>
+"sudo cat /etc/rancher/k3s/k3s.yaml" > ~/.kube/config` - a direct pipe
+with no human transcription step, eliminating the corruption risk
+entirely.
+
+**Symptom (2):** After fixing the YAML and pointing `server:` at the
+instance's public IP, `kubectl` failed differently: `tls: failed to
+verify certificate: x509: certificate is valid for 10.43.0.1,
+127.0.0.1, 172.31.35.192, ::1, not <public-ip>`.
+
+**Root cause (2):** K3s generates its TLS certificate at install time
+using only the addresses it knows about then (internal cluster IP,
+localhost, private IP) - the instance's public IP isn't included by
+default, so a client connecting via the public IP correctly fails
+certificate verification (TLS working as intended, not a bug).
+
+**Fix (2):** Added the public IP as a `tls-san` entry in
+`/etc/rancher/k3s/config.yaml`, restarted K3s to regenerate its
+certificate with the new SAN included, then re-pulled a fresh
+kubeconfig (the old one's cached CA data no longer matched). Note:
+switching to an Elastic IP later required repeating this once more
+(new IP, same fix) - documented separately below.
+
+## Elastic IP Required for Stable Access Across EC2 Stop/Start Cycles
+
+**Symptom:** Recognized before hitting it directly: AWS assigns a new
+public IP to a `t3.micro` instance every time it's stopped and
+restarted (EBS-backed instances persist disk state but not their public
+IP by default). This would have broken SSH, `kubectl`'s TLS trust (the
+old IP baked into `tls-san`), and the app's public NodePort URL on
+every restart.
+
+**Fix:** Added an `aws_eip` resource in Terraform, associated with the
+instance. This required one final repeat of the `tls-san`/kubeconfig
+fix above (for the new, now-permanent Elastic IP), after which the
+address never changes again across stop/start cycles - a
+one-time cost for a permanent fix, applied via Terraform rather than a
+manual console click to keep the whole instance lifecycle in code.
+
 ## (More entries added as encountered)
