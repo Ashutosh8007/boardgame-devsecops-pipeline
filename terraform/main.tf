@@ -85,6 +85,19 @@ resource "aws_instance" "boardgame_node" {
   }
 }
 
+# Elastic IP: a static public IP that persists across instance stop/start
+# cycles. Without this, AWS assigns a new public IP every time the
+# instance restarts, breaking SSH, kubectl's TLS cert (which has the
+# old IP baked into its tls-san list), and the app's public URL.
+resource "aws_eip" "boardgame_eip" {
+  instance = aws_instance.boardgame_node.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "boardgame-eip"
+  }
+}
+
 # Always looks up the latest official Ubuntu 22.04 AMI for the region,
 # rather than hardcoding an AMI ID - AMI IDs are region-specific and
 # get replaced periodically as Canonical patches the base image, so
