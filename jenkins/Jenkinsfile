@@ -8,6 +8,7 @@ pipeline {
 
     environment {
         APP_DIR = 'app'
+	DOCKERHUB_USER = 'ashutosh8007'
     }
 
     stages {
@@ -60,6 +61,52 @@ pipeline {
             post {
                 always {
                     archiveArtifacts artifacts: "${APP_DIR}/trivy-fs-report.json", allowEmptyArchive: true
+                }
+            }
+        }	
+	
+	stage('Build Docker Image') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh "docker build -t ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER} -t ${DOCKERHUB_USER}/boardgame:latest ."
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                dir("${APP_DIR}") {
+                    // Same informational, non-blocking approach as the
+                    // filesystem scan in Phase 7 - image-layer OS package
+                    // vulnerabilities are captured and archived, not silently
+                    // ignored, but don't block the push given this project's
+                    // known legacy dependency constraints (documented in
+                    // docs/future-improvements.md).
+                    sh """
+                        trivy image --scanners vuln --severity HIGH,CRITICAL \
+                          --exit-code 0 --format json -o trivy-image-report.json \
+                          ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
+                        trivy image --scanners vuln --severity HIGH,CRITICAL \
+                          --exit-code 0 ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
+                    """
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: "${APP_DIR}/trivy-image-report.json", allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_UN', passwordVariable: 'DOCKERHUB_PW')]) {
+                    sh '''
+                        echo "$DOCKERHUB_PW" | docker login -u "$DOCKERHUB_UN" --password-stdin
+                        docker push ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
+                        docker push ${DOCKERHUB_USER}/boardgame:latest
+                        docker logout
+                    '''
                 }
             }
         }	
