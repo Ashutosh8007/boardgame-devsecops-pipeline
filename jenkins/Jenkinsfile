@@ -44,18 +44,14 @@ pipeline {
 	stage('Trivy Filesystem Scan') {
             steps {
                 dir("${APP_DIR}") {
-                    // Informational, not blocking: this app's dependency tree
-                    // (Spring Boot 2.5.6, from 2021) has known, real CVEs that
-                    // would require a significant framework upgrade to fully
-                    // resolve - out of scope for this pipeline phase. Findings
-                    // are captured and archived so they're visible and tracked,
-                    // not silently ignored. See docs/future-improvements.md.
-                    sh '''
-                        trivy fs --scanners vuln --severity HIGH,CRITICAL \
-                          --exit-code 0 --format json -o trivy-fs-report.json .
-                        trivy fs --scanners vuln --severity HIGH,CRITICAL \
-                          --exit-code 0 .
-                    '''
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        sh '''
+                            trivy fs --scanners vuln --severity HIGH,CRITICAL \
+                              --timeout 10m --exit-code 0 --format json -o trivy-fs-report.json .
+                            trivy fs --scanners vuln --severity HIGH,CRITICAL \
+                              --timeout 10m --exit-code 0 .
+                        '''
+                    }
                 }
             }
             post {
@@ -76,19 +72,15 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 dir("${APP_DIR}") {
-                    // Same informational, non-blocking approach as the
-                    // filesystem scan in Phase 7 - image-layer OS package
-                    // vulnerabilities are captured and archived, not silently
-                    // ignored, but don't block the push given this project's
-                    // known legacy dependency constraints (documented in
-                    // docs/future-improvements.md).
-                    sh """
-                        trivy image --scanners vuln --severity HIGH,CRITICAL \
-                          --exit-code 0 --format json -o trivy-image-report.json \
-                          ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
-                        trivy image --scanners vuln --severity HIGH,CRITICAL \
-                          --exit-code 0 ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
-                    """
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        sh """
+                            trivy image --scanners vuln --severity HIGH,CRITICAL \
+                              --timeout 10m --exit-code 0 --format json -o trivy-image-report.json \
+                              ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
+                            trivy image --scanners vuln --severity HIGH,CRITICAL \
+                              --timeout 10m --exit-code 0 ${DOCKERHUB_USER}/boardgame:${BUILD_NUMBER}
+                        """
+                    }
                 }
             }
             post {
