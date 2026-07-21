@@ -24,3 +24,22 @@ service:
   port: 8080
   targetPort: 8080
   nodePort: 30080
+
+# Probes
+# readinessProbe: controls whether traffic is routed to this pod.
+# livenessProbe: controls whether Kubernetes restarts the container.
+# initialDelaySeconds is set higher for liveness than readiness - we want
+# Kubernetes checking readiness relatively early (so it can hold back
+# traffic during JVM startup), but liveness should wait longer before it's
+# even willing to consider killing a slow-but-legitimately-starting pod.
+# failureThreshold * periodSeconds gives real tolerance for a transient
+# blip (e.g. a GC pause) before either probe takes action.
+probes:
+  readiness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
