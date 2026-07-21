@@ -1,0 +1,26 @@
+# Image
+image:
+  repository: ashutosh8007/boardgame
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Deployment
+replicaCount: 1
+
+# Resource limits - matched to the JVM heap tuning in the Dockerfile
+# (-Xmx256m -Xms128m) and the node's real constraint (913Mi total RAM,
+# with K3s's own control plane already using ~500-550Mi)
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "350Mi"
+    cpu: "500m"
+
+# Service
+service:
+  type: NodePort
+  port: 8080
+  targetPort: 8080
+  nodePort: 30080

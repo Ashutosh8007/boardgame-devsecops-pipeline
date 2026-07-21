@@ -1,0 +1,6 @@
+apiVersion: v2
+name: boardgame
+description: Helm chart for the Boardgame DevSecOps pipeline application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
