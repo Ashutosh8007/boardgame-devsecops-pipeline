@@ -273,3 +273,31 @@ correctly proposed swapping the stale IP for the current one in both the
 SSH and K3s-API security group rules. This is a recurring, expected
 maintenance step on a home network, not a one-time fix - worth checking
 first whenever kubectl times out (rather than TLS-errors) after a break.
+
+## Verified Zero-Downtime Rollback (Deliberate Test)
+
+**What was tested:** Deliberately deployed a nonexistent image tag
+(`helm upgrade boardgame . --set image.tag=this-tag-does-not-exist`) to
+verify the readiness probe and Kubernetes' rolling update strategy
+actually prevent an outage during a bad deployment, rather than just
+assuming they would.
+
+**Observed behavior:** The new pod correctly entered `ErrImagePull` /
+`ImagePullBackOff` and never became ready. Because a Deployment's
+default rolling update strategy only terminates the previous pod once
+the replacement passes its readiness probe, the old (working) pod
+remained `1/1 Running` and continued serving traffic for the entire
+duration of the failed rollout - confirmed via the browser at
+`http://<elastic-ip>:30080` staying reachable throughout.
+
+**Recovery:** `helm rollback boardgame` cleanly terminated the broken
+pod and restored the previous release. `helm history boardgame` shows
+a clear, auditable record (`Rollback to 5`), distinct from a normal
+upgrade entry.
+
+**Why this matters:** This confirms the readiness probe added earlier
+in Phase 12 isn't just declared configuration - it has a real,
+verified effect on deployment safety. Zero-downtime deploys and safe
+rollbacks aren't automatic; they depend on the probes being correctly
+configured, which is why this was worth testing deliberately rather
+than assumed.
