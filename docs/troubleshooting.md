@@ -246,3 +246,30 @@ one-time cost for a permanent fix, applied via Terraform rather than a
 manual console click to keep the whole instance lifecycle in code.
 
 ## (More entries added as encountered)
+
+## kubectl Times Out After Home IP Address Changes (i/o timeout, not TLS/refused)
+
+**Symptom:** `kubectl get nodes` fails with `dial tcp <elastic-ip>:6443: i/o
+timeout` - distinct from a TLS error or "connection refused". The EC2
+instance is confirmed `running` via `aws ec2 describe-instances`.
+
+**Root cause:** The security group's SSH and K3s-API ingress rules are
+locked to the operator's IP at the time of the last `terraform apply`
+(fetched via `data.http.my_ip`). Home ISP IP addresses can change between
+sessions; when they do, the security group silently drops all traffic
+from the new IP - AWS security groups don't reject with an error, they
+just don't respond, which is why the symptom is a timeout rather than a
+clear "access denied".
+
+**Diagnosis approach:** Compared the current IP (`curl -s
+https://checkip.amazonaws.com`) against what the security group actually
+allows (`aws ec2 describe-security-groups ... --query
+'SecurityGroups[0].IpPermissions[?ToPort==\`6443\`].IpRanges[].CidrIp'`)
+rather than assuming the instance itself was the problem.
+
+**Fix:** Re-ran `terraform plan`/`apply` with no code changes needed -
+`data.http.my_ip` re-fetches the current IP automatically, so Terraform
+correctly proposed swapping the stale IP for the current one in both the
+SSH and K3s-API security group rules. This is a recurring, expected
+maintenance step on a home network, not a one-time fix - worth checking
+first whenever kubectl times out (rather than TLS-errors) after a break.
