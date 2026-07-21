@@ -43,3 +43,15 @@ probes:
     initialDelaySeconds: 30
     periodSeconds: 15
     failureThreshold: 3
+
+# Security context - UID 100 matches the 'spring' user created in the
+# Dockerfile (adduser -S spring, Alpine's useradd assigns UID 100 to
+# the first system user). fsGroup ensures any mounted volumes are
+# group-owned by this UID too. readOnlyRootFilesystem defaults to
+# false here pending a live test - Spring Boot/Tomcat may need to
+# write temp files at runtime; flip to true only after confirming the
+# app still starts cleanly.
+securityContext:
+  runAsUser: 100
+  fsGroup: 100
+  readOnlyRootFilesystem: false
