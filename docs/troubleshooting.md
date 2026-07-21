@@ -301,3 +301,31 @@ verified effect on deployment safety. Zero-downtime deploys and safe
 rollbacks aren't automatic; they depend on the probes being correctly
 configured, which is why this was worth testing deliberately rather
 than assumed.
+
+## K3s kubectl Ignores ~/.kube/config; Cron Doesn't Source ~/.bashrc
+
+**Symptom:** A health-check script using `kubectl` worked fine when run
+manually after `export KUBECONFIG=~/.kube/config`, but `kubectl`
+commands failed with a permission error on a fresh shell, and (had it
+not been caught first) would have silently failed differently under
+cron.
+
+**Root cause (1):** K3s's `kubectl` is a symlink to the `k3s` binary
+itself (confirmed in the install log back in Phase 9), and it defaults
+to reading `/etc/rancher/k3s/k3s.yaml` directly - a root-owned file -
+rather than following the standard `~/.kube/config` convention used by
+a standalone `kubectl` binary. Copying the config to `~/.kube/config`
+alone wasn't sufficient; `KUBECONFIG` had to be explicitly set to
+override the default lookup path.
+
+**Root cause (2):** Even after fixing the above via `~/.bashrc`, cron
+jobs run in a minimal, non-interactive shell environment that does not
+source `~/.bashrc` - a fix that works "in the terminal" silently does
+not apply under cron.
+
+**Fix:** Added `export KUBECONFIG=/home/ubuntu/.kube/config` as an
+explicit line inside the script itself (using an absolute path, not
+`~`, since cron's environment doesn't reliably expand it), rather than
+relying on any shell profile. Verified genuine unattended cron
+execution by checking for a new log line appended with no manual
+trigger, rather than trusting the crontab entry alone.
