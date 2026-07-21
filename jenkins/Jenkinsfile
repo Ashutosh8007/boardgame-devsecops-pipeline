@@ -102,6 +102,7 @@ pipeline {
                 }
             }
         }	
+       
 
         stage('SonarQube Analysis') {
             steps {
@@ -114,6 +115,31 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-boardgame', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=\$KUBECONFIG_FILE
+                        helm upgrade --install boardgame ./helm/boardgame \
+                          --set image.tag=${BUILD_NUMBER} \
+                          --wait --timeout 5m
+                    """
+                }
+            }
+            post {
+                always {
+                    withCredentials([file(credentialsId: 'kubeconfig-boardgame', variable: 'KUBECONFIG_FILE')]) {
+                        sh '''
+                            export KUBECONFIG=$KUBECONFIG_FILE
+                            kubectl get pods
+                            kubectl get svc
+                        '''
+                    }
+                }
+            }
+        }
+        
 
         // NOTE: A blocking Quality Gate wait (waitForQualityGate) was
         // intentionally removed. On this resource-constrained WSL
